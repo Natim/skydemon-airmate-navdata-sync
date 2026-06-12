@@ -10,14 +10,15 @@ from tqdm import tqdm
 # CONFIG
 # =========================
 
+ID = "<YOUR_ID>"
 BASE_DIR = Path("./downloads")
 TARGET_DIR = Path("./downloads_prepared")
 
 FILES = {
     # Core Dynon
-    "navdata": "https://www.airmate.aero/download/navdata/RHUBSCHER/airmate_av_data_eu_2606_008837.dup",
-    "obstacles": "https://www.airmate.aero/download/navdata/RHUBSCHER/airmate_obstacle_data_eu_2606_008837.dup",
-    "charts_key": "https://www.airmate.aero/download/navdata/RHUBSCHER/CHARTS-008837.key",
+    "navdata": f"https://www.airmate.aero/download/navdata/{ID}/airmate_av_data_eu_2606_008837.dup",
+    "obstacles": f"https://www.airmate.aero/download/navdata/{ID}/airmate_obstacle_data_eu_2606_008837.dup",
+    "charts_key": f"https://www.airmate.aero/download/navdata/{ID}/CHARTS-008837.key",
 
     # Plates
     "plates_fr": "https://www.airmate.aero/download/navdata/Plates/FR-Plates-2606.zip",
