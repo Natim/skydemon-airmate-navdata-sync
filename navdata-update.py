@@ -1,6 +1,7 @@
 #!/home/rhubscher/.virtualenvs/navdata/bin/python
 import asyncio
 import httpx
+import shutil
 import zipfile
 from pathlib import Path
 from tqdm import tqdm
@@ -14,17 +15,17 @@ TARGET_DIR = Path("./downloads_prepared")
 
 FILES = {
     # Core Dynon
-    "navdata": "https://www.airmate.aero/download/navdata/RHUBSCHER/airmate_av_data_eu_2605_008837.dup",
-    "obstacles": "https://www.airmate.aero/download/navdata/RHUBSCHER/airmate_obstacle_data_eu_2605_008837.dup",
+    "navdata": "https://www.airmate.aero/download/navdata/RHUBSCHER/airmate_av_data_eu_2606_008837.dup",
+    "obstacles": "https://www.airmate.aero/download/navdata/RHUBSCHER/airmate_obstacle_data_eu_2606_008837.dup",
     "charts_key": "https://www.airmate.aero/download/navdata/RHUBSCHER/CHARTS-008837.key",
 
     # Plates
-    "plates_fr": "https://www.airmate.aero/download/navdata/Plates/FR-Plates-2605.zip",
-    "plates_europe": "https://www.airmate.aero/download/navdata/Plates/Europe-Plates-2605.zip",
+    "plates_fr": "https://www.airmate.aero/download/navdata/Plates/FR-Plates-2606.zip",
+    "plates_europe": "https://www.airmate.aero/download/navdata/Plates/Europe-Plates-2606.zip",
 
     # Raster
     "vfr_fr": "https://www.airmate.aero/download/navdata/Raster/VFR-FRANCE-OACI-16APR26.dcf",
-    "vfr_europe": "https://www.airmate.aero/download/navdata/Raster/VFR-EUROPE-HIRES-17APR25.dcf",
+    "vfr_europe": "https://www.airmate.aero/download/navdata/Raster/VFR-EUROPE-HIRES-14MAY26.dcf",
 }
 
 CHUNK_SIZE = 1024 * 1024  # 1MB
@@ -147,17 +148,29 @@ async def download_all():
 def prepare_structure():
     print("📦 Construction du dossier final...")
 
-    TARGET_DIR.mkdir(exist_ok=True)
+    if TARGET_DIR.exists():
+        shutil.rmtree(TARGET_DIR)
+    TARGET_DIR.mkdir()
+
+    expected = {Path(url).name for url in FILES.values()}
 
     # DUP + KEY
-    for file in BASE_DIR.glob("*.dup"):
-        (TARGET_DIR / file.name.upper()).write_bytes(file.read_bytes())
-
-    for file in BASE_DIR.glob("*.key"):
-        (TARGET_DIR / file.name).write_bytes(file.read_bytes())
+    for name in sorted(expected):
+        src = BASE_DIR / name
+        if not src.is_file():
+            continue
+        if name.endswith(".dup"):
+            (TARGET_DIR / name.upper()).write_bytes(src.read_bytes())
+        elif name.endswith(".key"):
+            (TARGET_DIR / name).write_bytes(src.read_bytes())
 
     # ZIP → ChartData
-    for zip_file in BASE_DIR.glob("*.zip"):
+    for name in sorted(expected):
+        if not name.endswith(".zip"):
+            continue
+        zip_file = BASE_DIR / name
+        if not zip_file.is_file():
+            continue
         print(f"📂 Extraction {zip_file.name}")
         with zipfile.ZipFile(zip_file, "r") as z:
             z.extractall(TARGET_DIR)
@@ -166,10 +179,15 @@ def prepare_structure():
     raster_dir = TARGET_DIR / "Raster"
     raster_dir.mkdir(exist_ok=True)
 
-    for file in BASE_DIR.glob("*.dcf"):
-        (raster_dir / file.name).write_bytes(file.read_bytes())
+    for name in sorted(expected):
+        if not name.endswith(".dcf"):
+            continue
+        src = BASE_DIR / name
+        if not src.is_file():
+            continue
+        (raster_dir / name).write_bytes(src.read_bytes())
 
-    print(f"✅ Dossier prêt pour rsync: `rsync -avh --info=progress2 --delete {TARGET_DIR} /media/usbkey/`")
+    print(f"✅ Dossier prêt pour rsync: `rsync -avh --info=progress2 --delete {TARGET_DIR}/ /media/usbkey/`")
 
 
 # =========================
