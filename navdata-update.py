@@ -16,20 +16,32 @@ TARGET_DIR = Path("./downloads_prepared")
 
 FILES = {
     # Core Dynon
-    "navdata": f"https://www.airmate.aero/download/navdata/{ID}/airmate_av_data_eu_2606_008837.dup",
-    "obstacles": f"https://www.airmate.aero/download/navdata/{ID}/airmate_obstacle_data_eu_2606_008837.dup",
+    "navdata": f"https://www.airmate.aero/download/navdata/{ID}/airmate_av_data_eu_2607_008837.dup",
+    "obstacles": f"https://www.airmate.aero/download/navdata/{ID}/airmate_obstacle_data_eu_2607_008837.dup",
     "charts_key": f"https://www.airmate.aero/download/navdata/{ID}/CHARTS-008837.key",
 
     # Plates
-    "plates_fr": "https://www.airmate.aero/download/navdata/Plates/FR-Plates-2606.zip",
-    "plates_europe": "https://www.airmate.aero/download/navdata/Plates/Europe-Plates-2606.zip",
+    "plates_fr": "https://www.airmate.aero/download/navdata/Plates/FR-Plates-2607.zip",
+    "plates_europe": "https://www.airmate.aero/download/navdata/Plates/Europe-Plates-2607.zip",
 
     # Raster
     "vfr_fr": "https://www.airmate.aero/download/navdata/Raster/VFR-FRANCE-OACI-16APR26.dcf",
     "vfr_europe": "https://www.airmate.aero/download/navdata/Raster/VFR-EUROPE-HIRES-14MAY26.dcf",
+    "denmark": "https://www.airmate.aero/download/navdata/Raster/VFR-DENMARK-NAVIAIR-14MAY26.dcf",
+    "ireland": "https://www.airmate.aero/download/navdata/Raster/VFR-IRELAND-01JAN24.dcf",
+    "uk": "https://www.airmate.aero/download/navdata/Raster/VFR-UK-01JAN24.dcf",
+    "italy": "https://www.airmate.aero/download/navdata/Raster/VFR-ITALY-16APR26.dcf",
+    "swiss": "https://www.airmate.aero/download/navdata/Raster/VFR-SWITZERLAND-19MAR26.dcf",
 }
 
 CHUNK_SIZE = 1024 * 1024  # 1MB
+
+
+def human_size(n):
+    for unit in ("B", "KB", "MB", "GB", "TB"):
+        if n < 1024 or unit == "TB":
+            return f"{n:.1f} {unit}"
+        n /= 1024
 
 
 # =========================
@@ -63,9 +75,18 @@ async def download_file(client, url, dest, progress):
 
     existing_size = dest.stat().st_size if dest.exists() else 0
 
+    # The .key file changes content every AIRAC cycle (chart filenames and
+    # auth codes rotate) while keeping the exact same byte size. A size-only
+    # "already complete" check would keep a stale key on disk, which makes the
+    # Dynon silently hide any layer whose filename/code no longer matches.
+    # Always fetch it fresh.
+    if dest.suffix.lower() == ".key" and dest.exists():
+        dest.unlink()
+        existing_size = 0
+
     # ✅ Case 1: already complete → skip
     if remote_size and existing_size >= remote_size:
-        print(f"⏭️  {dest.name} déjà complet")
+        tqdm.write(f"⏭️  {dest.name} déjà complet ({human_size(existing_size)})")
         return
 
     headers = {}
@@ -74,13 +95,20 @@ async def download_file(client, url, dest, progress):
     if existing_size > 0:
         headers["Range"] = f"bytes={existing_size}-"
         mode = "ab"
+        remaining = human_size(remote_size - existing_size) if remote_size else "?"
+        tqdm.write(
+            f"↩️  Reprise {dest.name} "
+            f"({human_size(existing_size)}/{human_size(remote_size)}, reste {remaining})"
+        )
+    else:
+        tqdm.write(f"⬇️  Téléchargement {dest.name} ({human_size(remote_size)})")
 
     try:
         async with client.stream("GET", url, headers=headers) as response:
 
             # ✅ Handle 416 properly
             if response.status_code == 416:
-                print(f"⚠️  {dest.name} mismatch → re-download complet")
+                tqdm.write(f"⚠️  {dest.name} mismatch → re-download complet")
                 dest.unlink(missing_ok=True)
 
                 async with client.stream("GET", url) as response2:
@@ -90,6 +118,7 @@ async def download_file(client, url, dest, progress):
                         async for chunk in response2.aiter_bytes(CHUNK_SIZE):
                             f.write(chunk)
                             progress.update(len(chunk))
+                tqdm.write(f"✅ {dest.name} terminé ({human_size(dest.stat().st_size)})")
                 return
 
             response.raise_for_status()
@@ -99,8 +128,10 @@ async def download_file(client, url, dest, progress):
                     f.write(chunk)
                     progress.update(len(chunk))
 
+        tqdm.write(f"✅ {dest.name} terminé ({human_size(dest.stat().st_size)})")
+
     except httpx.HTTPError as e:
-        print(f"❌ Erreur téléchargement {dest.name}: {e}")
+        tqdm.write(f"❌ Erreur téléchargement {dest.name}: {e}")
 
 
 # =========================
