@@ -219,7 +219,10 @@ def prepare_structure():
             continue
         (raster_dir / name).write_bytes(src.read_bytes())
 
-    print(f"✅ Dossier prêt pour rsync: `rsync -avh --info=progress2 --delete {TARGET_DIR}/ /media/usbkey/`")
+    # --no-inc-recursive forces rsync to build the full file list before
+    # transferring, so --info=progress2 shows a stable total and an accurate
+    # overall percentage (otherwise the list grows as it goes).
+    print(f"✅ Dossier prêt pour rsync: `rsync -avh --no-inc-recursive --info=progress2 --delete {TARGET_DIR}/ '/run/media/{ID.lower()}/LH D1000/'`")
 
 
 # =========================
