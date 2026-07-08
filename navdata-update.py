@@ -219,10 +219,22 @@ def prepare_structure():
             continue
         (raster_dir / name).write_bytes(src.read_bytes())
 
-    # --no-inc-recursive forces rsync to build the full file list before
-    # transferring, so --info=progress2 shows a stable total and an accurate
-    # overall percentage (otherwise the list grows as it goes).
-    print(f"✅ Dossier prêt pour rsync: `rsync -avh --no-inc-recursive --info=progress2 --delete {TARGET_DIR}/ '/run/media/{ID.lower()}/LH D1000/'`")
+    # This folder is rebuilt from scratch each run, so every file gets a fresh
+    # mtime and rsync's default size+mtime check would recopy everything. Flags:
+    #   --checksum        decide by content, not the (always-new) timestamp, so
+    #                     only files whose bytes actually changed get written
+    #                     (--size-only would miss same-size changes like the key)
+    #   --inplace         write changes into the destination file directly, no
+    #                     temp copy -> matters on a nearly-full FAT-32 stick
+    #   --no-whole-file   use the delta algorithm even for a local/USB target so
+    #                     only the changed blocks are rewritten
+    #   --no-inc-recursive build the full list up front for an accurate progress2
+    dest = f"/run/media/{ID.lower()}/LH D1000/"
+    print(
+        "✅ Dossier prêt pour rsync: "
+        f"`rsync -avh --checksum --inplace --no-whole-file --no-inc-recursive "
+        f"--info=progress2 --delete {TARGET_DIR}/ '{dest}'`"
+    )
 
 
 # =========================
