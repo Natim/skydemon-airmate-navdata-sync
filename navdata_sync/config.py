@@ -15,8 +15,8 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_CONFIG = REPO_ROOT / "config.toml"
 EXAMPLE_CONFIG = REPO_ROOT / "config.example.toml"
 
-ID_ENV = "WT9_AIRMATE_ID"
-SERIAL_ENV = "WT9_AIRMATE_SERIAL"
+ID_ENV = "AIRMATE_ID"
+SERIAL_ENV = "AIRMATE_SERIAL"
 
 # Values shipped in config.example.toml. Refusing them keeps a half-filled copy
 # of the example from producing a run of 404s.

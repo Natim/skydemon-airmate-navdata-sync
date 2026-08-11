@@ -1,9 +1,9 @@
 # skydemon-airmate-navdata-sync
 
-Keeps the navigation data of a WT9 Dynamic's Dynon SkyView up to date: it
-downloads an [Airmate](https://www.airmate.aero) AIRAC cycle, lays the files out
-exactly the way the Dynon expects them, and copies the result onto the USB stick
-without rewriting the gigabytes that did not change.
+Keeps the navigation data of a Dynon SkyView up to date: it downloads an
+[Airmate](https://www.airmate.aero) AIRAC cycle, lays the files out exactly the
+way the Dynon expects them, and copies the result onto the USB stick without
+rewriting the gigabytes that did not change.
 
 Everything specific to a subscription or a machine — the Airmate customer id,
 the Dynon serial, the AIRAC cycle, the local paths — lives in `config.toml`,
@@ -37,7 +37,7 @@ If you would rather not keep those on disk, leave the placeholders in place and
 export them instead; the environment always wins over the file:
 
 ```bash
-export WT9_AIRMATE_ID=... WT9_AIRMATE_SERIAL=...
+export AIRMATE_ID=... AIRMATE_SERIAL=...
 ```
 
 Every other setting is documented inline in
@@ -96,7 +96,7 @@ and easy on a nearly-full FAT-32 stick.
 ```
 navdata-update.py          entry point
 config.example.toml        documented template for the git-ignored config.toml
-wt9_navdata/
+navdata_sync/
   config.py                reads config.toml, applies env overrides, validates
   catalog.py               turns the config into the list of URLs to fetch
   download.py              resumable parallel downloader

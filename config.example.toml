@@ -9,13 +9,13 @@
 # The customer id that appears in your personal download URLs:
 #   https://www.airmate.aero/download/navdata/<id>/...
 # It is shown on the Airmate download page once you are logged in.
-# May also be supplied through the WT9_AIRMATE_ID environment variable.
+# May also be supplied through the AIRMATE_ID environment variable.
 id = "YOUR_AIRMATE_ID"
 
 # Serial number of the Dynon unit the subscription is bound to. It is the
 # number embedded in the data filenames:
 #   airmate_av_data_eu_<cycle>_<serial>.dup   CHARTS-<serial>.key
-# May also be supplied through the WT9_AIRMATE_SERIAL environment variable.
+# May also be supplied through the AIRMATE_SERIAL environment variable.
 serial = "000000"
 
 # Only change this if Airmate moves its download endpoint.
