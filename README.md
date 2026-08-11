@@ -1,4 +1,4 @@
-# wt9-navdata
+# skydemon-airmate-navdata-sync
 
 Keeps the navigation data of a WT9 Dynamic's Dynon SkyView up to date: it
 downloads an [Airmate](https://www.airmate.aero) AIRAC cycle, lays the files out
