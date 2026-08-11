@@ -12,7 +12,7 @@ except ModuleNotFoundError as exc:
     # virtualenv looks like rather than a broken checkout.
     raise SystemExit(
         f"❌ dépendance manquante: {exc.name}\n"
-        "   activez votre virtualenv, ou: pip install -r requirements.txt"
+        "   activez votre virtualenv, ou: pip install -e ."
     ) from exc
 
 if __name__ == "__main__":

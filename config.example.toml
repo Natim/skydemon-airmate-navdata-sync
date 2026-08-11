@@ -45,6 +45,10 @@ raster = [
 ]
 
 [paths]
+# Relative paths below are resolved next to this config file, which keeps a git
+# checkout self-contained. If this config lives in ~/.config, make them absolute
+# instead: the AIRAC cycle is several gigabytes and does not belong there.
+
 # Download cache. Partially downloaded files are resumed from here, so keeping
 # it between runs saves bandwidth.
 download_dir = "downloads"

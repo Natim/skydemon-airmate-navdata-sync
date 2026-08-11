@@ -1,0 +1,64 @@
+[build-system]
+requires = ["hatchling>=1.27"]
+build-backend = "hatchling.build"
+
+[project]
+name = "airmate-navdata-sync"
+dynamic = ["version"]
+description = "Download an Airmate AIRAC cycle and lay it out for a Dynon SkyView USB stick"
+readme = "README.md"
+requires-python = ">=3.11"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [{ name = "Rémy Hubscher", email = "remy@yampa.ai" }]
+keywords = ["aviation", "airmate", "dynon", "skyview", "navdata", "airac", "vfr"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: Console",
+    "Intended Audience :: End Users/Desktop",
+    "Operating System :: POSIX :: Linux",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Scientific/Engineering :: GIS",
+    "Topic :: Utilities",
+]
+dependencies = [
+    "httpx[http2]>=0.28",
+    "tqdm>=4.67",
+]
+
+[project.optional-dependencies]
+# Only for tools/mbtiles_to_dcf.py, which ships in the sdist and the git
+# checkout rather than in the wheel.
+mbtiles = ["Pillow>=10.0"]
+
+[project.scripts]
+navdata-update = "navdata_sync.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/Natim/skydemon-airmate-navdata-sync"
+Source = "https://github.com/Natim/skydemon-airmate-navdata-sync"
+Issues = "https://github.com/Natim/skydemon-airmate-navdata-sync/issues"
+
+[tool.hatch.version]
+path = "navdata_sync/__init__.py"
+
+[tool.hatch.build.targets.wheel]
+packages = ["navdata_sync"]
+
+# An installed copy has no repository to read the template from, and
+# --init-config needs it to write a starter configuration.
+[tool.hatch.build.targets.wheel.force-include]
+"config.example.toml" = "navdata_sync/config.example.toml"
+
+[tool.hatch.build.targets.sdist]
+include = [
+    "navdata_sync",
+    "tools",
+    "navdata-update.py",
+    "config.example.toml",
+    "README.md",
+    "LICENSE",
+]

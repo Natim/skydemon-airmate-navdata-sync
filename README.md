@@ -17,13 +17,26 @@ which is git-ignored. The code contains no ids.
 
 ## Setup
 
+Either install the release, which puts a `navdata-update` command on your PATH:
+
 ```bash
+pip install airmate-navdata-sync
+navdata-update --init-config      # writes ~/.config/navdata-sync/config.toml
+```
+
+or work from a checkout, which keeps everything in one folder. `pip install -e .`
+installs the dependencies from `pyproject.toml` and links the package in place,
+so edits take effect without reinstalling:
+
+```bash
+git clone https://github.com/Natim/skydemon-airmate-navdata-sync
+cd skydemon-airmate-navdata-sync
 python3 -m venv .venv && . .venv/bin/activate
-pip install -r requirements.txt
+pip install -e .
 cp config.example.toml config.toml
 ```
 
-Then edit `config.toml`. The two values you have to fill in are in the
+Then edit the config file. The two values you have to fill in are in the
 `[airmate]` section:
 
 - `id` — the customer id in your personal download URLs
@@ -43,15 +56,22 @@ export AIRMATE_ID=... AIRMATE_SERIAL=...
 Every other setting is documented inline in
 [`config.example.toml`](config.example.toml).
 
+Without `--config`, the first of these that exists is used: `./config.toml`,
+then `~/.config/navdata-sync/config.toml` (honouring `XDG_CONFIG_HOME`), then
+`config.toml` at the root of a checkout.
+
 ## Usage
 
 ```bash
-./navdata-update.py                 # download the configured cycle, then stage it
-./navdata-update.py --list          # show which files the config resolves to
-./navdata-update.py --cycle 2609    # try the next cycle without editing the config
-./navdata-update.py --skip-download # rebuild the staging folder from the cache
-./navdata-update.py --sync          # ...and rsync it onto the USB stick
+navdata-update                 # download the configured cycle, then stage it
+navdata-update --list          # show which files the config resolves to
+navdata-update --cycle 2609    # try the next cycle without editing the config
+navdata-update --skip-download # rebuild the staging folder from the cache
+navdata-update --sync          # ...and rsync it onto the USB stick
 ```
+
+From a checkout without installing, `./navdata-update.py` and
+`python -m navdata_sync` take the same arguments.
 
 Without `--sync` the run stops after staging and prints the exact `rsync`
 command, so you can inspect the result first.
@@ -94,10 +114,11 @@ and easy on a nearly-full FAT-32 stick.
 ## Repository layout
 
 ```
-navdata-update.py          entry point
+pyproject.toml             packaging metadata, distributed as airmate-navdata-sync
+navdata-update.py          entry point for a checkout, mirrors the installed command
 config.example.toml        documented template for the git-ignored config.toml
 navdata_sync/
-  config.py                reads config.toml, applies env overrides, validates
+  config.py                finds and validates config.toml, applies env overrides
   catalog.py               turns the config into the list of URLs to fetch
   download.py              resumable parallel downloader
   prepare.py               staging into the Dynon layout, and the rsync call
@@ -107,9 +128,24 @@ tools/
 ```
 
 `tools/mbtiles_to_dcf.py` is a standalone experiment, not part of the update
-flow. It builds a `.dcf` raster layer from any MBTiles source; note that a layer
+flow, so it ships in the source distribution and the checkout rather than in the
+wheel. It builds a `.dcf` raster layer from any MBTiles source; note that a layer
 is only displayed if a matching entry exists in `CHARTS-<serial>.key`, which the
-script cannot create. Run `tools/mbtiles_to_dcf.py --help` for the options.
+script cannot create. It needs Pillow, from the `mbtiles` extra
+(`pip install -e '.[mbtiles]'` in a checkout); run
+`tools/mbtiles_to_dcf.py --help` for the options.
+
+## Releasing
+
+```bash
+pip install build twine
+python -m build            # writes dist/*.whl and dist/*.tar.gz
+twine check dist/*
+twine upload dist/*
+```
+
+The version lives in `navdata_sync/__init__.py` and is read from there by the
+build backend, so bump it in that one place.
 
 ## A note on the data
 

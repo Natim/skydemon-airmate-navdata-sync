@@ -7,7 +7,8 @@ import dataclasses
 from pathlib import Path
 
 from . import catalog, download, prepare
-from .config import DEFAULT_CONFIG, ConfigError
+from . import __version__
+from .config import ConfigError, init_config, search_path
 from .config import load as load_config
 
 
@@ -17,13 +18,20 @@ def build_parser() -> argparse.ArgumentParser:
         description="Download an Airmate AIRAC cycle and lay it out for a "
         "Dynon SkyView USB stick.",
     )
+    parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
+    searched = " or ".join(str(candidate) for candidate in search_path())
     parser.add_argument(
         "-c",
         "--config",
         type=Path,
-        default=DEFAULT_CONFIG,
         metavar="PATH",
-        help=f"configuration file (default: {DEFAULT_CONFIG})",
+        help=f"configuration file (default: the first of {searched})",
+    )
+    parser.add_argument(
+        "--init-config",
+        action="store_true",
+        help="write a starter configuration to --config, or to the per-user "
+        "location, then exit",
     )
     parser.add_argument(
         "--cycle",
@@ -50,6 +58,18 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
+
+    if args.init_config:
+        try:
+            target = init_config(args.config)
+        except ConfigError as exc:
+            print(f"❌ {exc}")
+            return 2
+        print(
+            f"✅ Configuration créée: {target}\n"
+            "   Renseignez airmate.id et airmate.serial avant le premier run."
+        )
+        return 0
 
     try:
         config = load_config(args.config)

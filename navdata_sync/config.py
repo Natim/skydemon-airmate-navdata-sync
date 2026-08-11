@@ -7,13 +7,14 @@ AIRAC cycle and the local paths. See config.example.toml for the reference.
 from __future__ import annotations
 
 import os
+import shutil
 import tomllib
 from dataclasses import dataclass
 from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parents[1]
-DEFAULT_CONFIG = REPO_ROOT / "config.toml"
-EXAMPLE_CONFIG = REPO_ROOT / "config.example.toml"
+APP_NAME = "navdata-sync"
+PACKAGE_DIR = Path(__file__).resolve().parent
+CHECKOUT_ROOT = PACKAGE_DIR.parent  # the repository root, in a git checkout
 
 ID_ENV = "AIRMATE_ID"
 SERIAL_ENV = "AIRMATE_SERIAL"
@@ -31,6 +32,55 @@ class ConfigError(Exception):
     """Raised when the config file is missing, unreadable or incomplete."""
 
 
+def user_config() -> Path:
+    """The per-user configuration, following the XDG base directory spec."""
+    base = os.environ.get("XDG_CONFIG_HOME") or Path.home() / ".config"
+    return Path(base) / APP_NAME / "config.toml"
+
+
+def search_path() -> list[Path]:
+    """Where an invocation without --config looks, in order.
+
+    The current directory comes first so a checkout keeps working as a
+    self-contained folder, then the per-user location for an installed copy,
+    then the checkout root so cron jobs and shell aliases need no --config.
+    """
+    candidates = [Path.cwd() / "config.toml", user_config()]
+
+    # Only a checkout has a sibling pyproject.toml; for an installed package
+    # CHECKOUT_ROOT is site-packages, which would be nonsense to suggest.
+    if (CHECKOUT_ROOT / "pyproject.toml").is_file():
+        candidates.append(CHECKOUT_ROOT / "config.toml")
+
+    return list(dict.fromkeys(candidates))
+
+
+def example_config() -> Path | None:
+    """The bundled template: beside the package, or inside it once installed."""
+    for candidate in (
+        CHECKOUT_ROOT / "config.example.toml",
+        PACKAGE_DIR / "config.example.toml",
+    ):
+        if candidate.is_file():
+            return candidate
+    return None
+
+
+def init_config(target: Path | None = None) -> Path:
+    """Copy the bundled template to target, without ever clobbering a config."""
+    target = (target or user_config()).expanduser()
+    if target.exists():
+        raise ConfigError(f"{target} already exists, leaving it alone")
+
+    example = example_config()
+    if example is None:
+        raise ConfigError("this installation is missing its config.example.toml")
+
+    target.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copyfile(example, target)
+    return target
+
+
 @dataclass(frozen=True)
 class Config:
     airmate_id: str
@@ -45,15 +95,23 @@ class Config:
 
 
 def load(path: Path | None = None) -> Config:
-    """Read a config file, apply environment overrides and validate it."""
-    path = (path or DEFAULT_CONFIG).expanduser()
+    """Read a config file, apply environment overrides and validate it.
 
+    Without an explicit path, the first file in search_path() wins.
+    """
+    if path is None:
+        searched = search_path()
+        path = next((candidate for candidate in searched if candidate.is_file()), None)
+        if path is None:
+            locations = "".join(f"      {candidate}\n" for candidate in searched)
+            raise ConfigError(
+                "no configuration file found, looked in:\n" + locations
+                + "    create one with: navdata-update --init-config"
+            )
+
+    path = path.expanduser()
     if not path.is_file():
-        raise ConfigError(
-            f"no config file at {path}\n"
-            f"    create one with: cp {_display(EXAMPLE_CONFIG)} "
-            f"{_display(path)}"
-        )
+        raise ConfigError(f"no config file at {path}")
 
     try:
         with path.open("rb") as fh:
@@ -122,11 +180,3 @@ def _string_list(section: dict, path: Path, name: str, key: str) -> tuple[str, .
 def _path(section: dict, path: Path, name: str, key: str, anchor: Path) -> Path:
     value = Path(_string(section, path, name, key)).expanduser()
     return value if value.is_absolute() else anchor / value
-
-
-def _display(path: Path) -> str:
-    """Shorten a path to a repo-relative one when it helps readability."""
-    try:
-        return str(path.relative_to(Path.cwd()))
-    except ValueError:
-        return str(path)
