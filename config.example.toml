@@ -1,0 +1,58 @@
+# Copy this file to config.toml and fill in your own values.
+#
+#   cp config.example.toml config.toml
+#
+# config.toml is git-ignored because it holds the two values that identify your
+# Airmate subscription: the customer id and the Dynon serial it is bound to.
+
+[airmate]
+# The customer id that appears in your personal download URLs:
+#   https://www.airmate.aero/download/navdata/<id>/...
+# It is shown on the Airmate download page once you are logged in.
+# May also be supplied through the WT9_AIRMATE_ID environment variable.
+id = "YOUR_AIRMATE_ID"
+
+# Serial number of the Dynon unit the subscription is bound to. It is the
+# number embedded in the data filenames:
+#   airmate_av_data_eu_<cycle>_<serial>.dup   CHARTS-<serial>.key
+# May also be supplied through the WT9_AIRMATE_SERIAL environment variable.
+serial = "000000"
+
+# Only change this if Airmate moves its download endpoint.
+base_url = "https://www.airmate.aero/download/navdata"
+
+[data]
+# AIRAC cycle to download, as <two-digit year><two-digit cycle number>.
+# 2608 is the 8th cycle of 2026. Bump this every 28 days.
+cycle = "2608"
+
+# Approach plate bundles, published as <region>-Plates-<cycle>.zip.
+# "FR" alone is enough if you only fly in France; "Europe" is a large download.
+plates = ["FR", "Europe"]
+
+# Raster VFR charts, published under <base_url>/Raster/.
+# The trailing date is the chart *edition*, not the AIRAC cycle, so these names
+# have to be updated by hand whenever a new edition is published. Remove the
+# ones you do not need: each entry is a few hundred MB on the USB stick.
+raster = [
+    "VFR-FRANCE-OACI-16APR26.dcf",
+    "VFR-EUROPE-HIRES-14MAY26.dcf",
+    "VFR-DENMARK-NAVIAIR-14MAY26.dcf",
+    "VFR-IRELAND-01JAN24.dcf",
+    "VFR-UK-01JAN24.dcf",
+    "VFR-ITALY-16APR26.dcf",
+    "VFR-SWITZERLAND-19MAR26.dcf",
+]
+
+[paths]
+# Download cache. Partially downloaded files are resumed from here, so keeping
+# it between runs saves bandwidth.
+download_dir = "downloads"
+
+# Staging area laid out exactly like the root of the Dynon USB stick. Rebuilt
+# from scratch on every run.
+prepared_dir = "downloads_prepared"
+
+# Mount point of the Dynon USB stick, used by --sync. Leave it empty to only
+# build the staging directory.
+usb_target = "/run/media/YOUR_USER/LH D1000"

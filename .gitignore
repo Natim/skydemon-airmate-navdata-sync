@@ -1,0 +1,16 @@
+# Holds the Airmate customer id and the Dynon serial.
+config.toml
+
+# Navdata (multi-GB, licensed per subscription) and the staging tree.
+downloads/
+downloads_prepared/
+*.dup
+*.DUP
+*.dcf
+*.key
+*.mbtiles
+
+__pycache__/
+*.py[cod]
+.venv/
+venv/

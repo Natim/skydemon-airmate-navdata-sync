@@ -1,0 +1,5 @@
+httpx[http2]>=0.28
+tqdm>=4.67
+
+# Only needed by tools/mbtiles_to_dcf.py, which imports it lazily.
+Pillow>=10.0
