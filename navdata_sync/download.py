@@ -1,4 +1,5 @@
 """Resumable, parallel downloads behind a single global progress bar."""
+
 from __future__ import annotations
 
 import asyncio
@@ -54,9 +55,7 @@ async def run(files: list[RemoteFile], download_dir: Path) -> None:
         progress.close()
 
 
-async def _plan(
-    client: httpx.AsyncClient, files: list[RemoteFile], download_dir: Path
-) -> list[_Job]:
+async def _plan(client: httpx.AsyncClient, files: list[RemoteFile], download_dir: Path) -> list[_Job]:
     sizes = await asyncio.gather(*(_remote_size(client, f.url) for f in files))
 
     jobs = []
@@ -79,7 +78,7 @@ async def _remote_size(client: httpx.AsyncClient, url: str) -> int:
 
 async def _fetch(client: httpx.AsyncClient, job: _Job, progress: tqdm) -> None:
     if job.complete:
-        tqdm.write(f"⏭️  {job.dest.name} déjà complet ({human_size(job.local_size)})")
+        tqdm.write(f"⏭️  {job.dest.name} déjà complete ({human_size(job.local_size)})")
         return
 
     job.dest.parent.mkdir(parents=True, exist_ok=True)
@@ -102,7 +101,7 @@ async def _fetch(client: httpx.AsyncClient, job: _Job, progress: tqdm) -> None:
         # A 416 means the server disagrees with our idea of the file length, so
         # the partial file is unusable: drop it, un-count its bytes and restart.
         if not resumed:
-            tqdm.write(f"⚠️  {job.dest.name} mismatch → re-téléchargement complet")
+            tqdm.write(f"⚠️  {job.dest.name} mismatch → re-téléchargement complete")
             job.dest.unlink(missing_ok=True)
             progress.update(-job.local_size)
             job.local_size = 0
@@ -114,16 +113,14 @@ async def _fetch(client: httpx.AsyncClient, job: _Job, progress: tqdm) -> None:
         tqdm.write(f"❌ Erreur téléchargement {job.dest.name}: {exc}")
 
 
-async def _stream(
-    client: httpx.AsyncClient, job: _Job, headers: dict[str, str], progress: tqdm
-) -> bool:
+async def _stream(client: httpx.AsyncClient, job: _Job, headers: dict[str, str], progress: tqdm) -> bool:
     """Append (or write) the response body to disk. False on a 416 rejection."""
     async with client.stream("GET", job.file.url, headers=headers) as response:
         if response.status_code == httpx.codes.REQUESTED_RANGE_NOT_SATISFIABLE:
             return False
         response.raise_for_status()
 
-        with open(job.dest, "ab" if headers.get("Range") else "wb") as fh:
+        with job.dest.open("ab" if headers.get("Range") else "wb") as fh:
             async for chunk in response.aiter_bytes(CHUNK_SIZE):
                 fh.write(chunk)
                 progress.update(len(chunk))

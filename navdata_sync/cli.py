@@ -1,4 +1,5 @@
 """Command line entry point: download, stage, optionally sync."""
+
 from __future__ import annotations
 
 import argparse
@@ -6,8 +7,7 @@ import asyncio
 import dataclasses
 from pathlib import Path
 
-from . import catalog, download, prepare
-from . import __version__
+from . import __version__, catalog, download, prepare
 from .config import ConfigError, init_config, search_path
 from .config import load as load_config
 
@@ -15,8 +15,7 @@ from .config import load as load_config
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="navdata-update",
-        description="Download an Airmate AIRAC cycle and lay it out for a "
-        "Dynon SkyView USB stick.",
+        description="Download an Airmate AIRAC cycle and lay it out for a Dynon SkyView USB stick.",
     )
     parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
     searched = " or ".join(str(candidate) for candidate in search_path())
@@ -30,8 +29,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--init-config",
         action="store_true",
-        help="write a starter configuration to --config, or to the per-user "
-        "location, then exit",
+        help="write a starter configuration to --config, or to the per-user location, then exit",
     )
     parser.add_argument(
         "--cycle",

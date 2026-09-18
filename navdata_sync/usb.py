@@ -21,6 +21,7 @@ aiofile (caio thread backend) is used because vfat/USB does not reliably
 support kernel AIO / O_DIRECT; the thread pool still lets the two sticks
 overlap.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -70,9 +71,7 @@ def relative_files(root: Path) -> list[Path]:
     if not root.is_dir():
         return []
     return sorted(
-        path.relative_to(root)
-        for path in root.rglob("*")
-        if path.is_file() and not path.is_symlink()
+        path.relative_to(root) for path in root.rglob("*") if path.is_file() and not path.is_symlink()
     )
 
 
@@ -103,10 +102,7 @@ def describe_sync(prepared_dir: Path, usb_targets: tuple[Path, ...]) -> str:
     for target in usb_targets:
         status = "montée" if target.is_dir() else "absente"
         lines.append(f"   • {target} ({status})")
-    lines.append(
-        "   Relancez avec --sync pour copier "
-        "(fichiers identiques ignorés, sticks en parallèle)."
-    )
+    lines.append("   Relancez avec --sync pour copier (fichiers identiques ignorés, sticks en parallèle).")
     return "\n".join(lines)
 
 
@@ -146,12 +142,12 @@ async def _sync(prepared_dir: Path, usb_targets: tuple[Path, ...]) -> int:
                 )
                 for target in mounted
             ]
-            reports = await asyncio.gather(*(
-                _sync_target(
-                    prepared_dir, manifest, target, ctx, progress, task_id
+            reports = await asyncio.gather(
+                *(
+                    _sync_target(prepared_dir, manifest, target, ctx, progress, task_id)
+                    for target, task_id in zip(mounted, task_ids)
                 )
-                for target, task_id in zip(mounted, task_ids)
-            ))
+            )
         print("💾 Vidage des caches disque...")
         os.sync()
 
@@ -194,9 +190,7 @@ def _advance(progress: Progress, task_id: TaskID, n: int) -> None:
     progress.update(task_id, advance=n)
 
 
-def _finish(
-    progress: Progress, task_id: TaskID, phase: str, current: str = ""
-) -> None:
+def _finish(progress: Progress, task_id: TaskID, phase: str, current: str = "") -> None:
     total = 1.0
     for task in progress.tasks:
         if task.id == task_id:
@@ -205,9 +199,7 @@ def _finish(
     progress.update(task_id, phase=phase, current=current, completed=total)
 
 
-async def _index_source(
-    prepared_dir: Path, files: list[Path], ctx: AsyncioContext
-) -> list[_FileInfo]:
+async def _index_source(prepared_dir: Path, files: list[Path], ctx: AsyncioContext) -> list[_FileInfo]:
     total = sum((prepared_dir / rel).stat().st_size for rel in files)
     with _usb_progress() as progress:
         task_id = progress.add_task(
@@ -251,9 +243,7 @@ async def _sync_target(
             dest = target / info.rel
             progress.update(task_id, phase="Vérif.", current=str(info.rel))
             if dest.is_file() and dest.stat().st_size == info.size:
-                digest = await _digest(
-                    dest, ctx, lambda n: _advance(progress, task_id, n)
-                )
+                digest = await _digest(dest, ctx, lambda n: _advance(progress, task_id, n))
                 if digest == info.digest:
                     report.skipped += 1
                     continue

@@ -35,6 +35,10 @@ dependencies = [
 # Only for tools/mbtiles_to_dcf.py, which ships in the sdist and the git
 # checkout rather than in the wheel.
 mbtiles = ["Pillow>=10.0"]
+dev = [
+    "pre-commit>=4.0",
+    "pytest>=8.3",
+]
 
 [project.scripts]
 navdata-update = "navdata_sync.cli:main"
@@ -63,4 +67,39 @@ include = [
     "config.example.toml",
     "README.md",
     "LICENSE",
+    "tests",
 ]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 110
+fix = true
+
+[tool.ruff.lint]
+select = [
+    "F",
+    "I",
+    "PTH",
+    "RUF",
+    "ASYNC210",
+    "E712",
+    "INP001",
+    "UP040",
+    "TID252",
+]
+
+[tool.ruff.lint.isort]
+known-first-party = ["navdata_sync"]
+order-by-type = false
+
+[tool.ruff.lint.flake8-tidy-imports]
+ban-relative-imports = "parents"
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["INP001"]
+"tools/**" = ["INP001"]
+"navdata-update.py" = ["INP001"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"

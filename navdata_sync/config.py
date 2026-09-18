@@ -4,6 +4,7 @@ Everything that identifies a particular subscription or machine lives in the
 config file, never in the code: the Airmate customer id, the Dynon serial, the
 AIRAC cycle and the local paths. See config.example.toml for the reference.
 """
+
 from __future__ import annotations
 
 import os
@@ -21,12 +22,14 @@ SERIAL_ENV = "AIRMATE_SERIAL"
 
 # Values shipped in config.example.toml. Refusing them keeps a half-filled copy
 # of the example from producing a run of 404s.
-PLACEHOLDERS = frozenset({
-    "YOUR_AIRMATE_ID",
-    "000000",
-    "/run/media/YOUR_USER/LH D1000",
-    "/run/media/YOUR_USER/RH D1000",
-})
+PLACEHOLDERS = frozenset(
+    {
+        "YOUR_AIRMATE_ID",
+        "000000",
+        "/run/media/YOUR_USER/LH D1000",
+        "/run/media/YOUR_USER/RH D1000",
+    }
+)
 
 
 class ConfigError(Exception):
@@ -106,7 +109,8 @@ def load(path: Path | None = None) -> Config:
         if path is None:
             locations = "".join(f"      {candidate}\n" for candidate in searched)
             raise ConfigError(
-                "no configuration file found, looked in:\n" + locations
+                "no configuration file found, looked in:\n"
+                + locations
                 + "    create one with: navdata-update --init-config"
             )
 
@@ -132,8 +136,7 @@ def load(path: Path | None = None) -> Config:
     for name, value, env in (("id", airmate_id, ID_ENV), ("serial", serial, SERIAL_ENV)):
         if value in PLACEHOLDERS:
             raise ConfigError(
-                f"airmate.{name} is still the example placeholder {value!r}; "
-                f"set it in {path} or export {env}"
+                f"airmate.{name} is still the example placeholder {value!r}; set it in {path} or export {env}"
             )
 
     # Relative paths follow the config file, so the script behaves the same from
@@ -193,9 +196,7 @@ def _usb_targets(paths: dict, config_path: Path) -> tuple[Path, ...]:
         elif isinstance(value, list) and all(isinstance(item, str) for item in value):
             collected.extend(value)
         else:
-            raise ConfigError(
-                f"paths.{key} in {config_path} must be a string or a list of strings"
-            )
+            raise ConfigError(f"paths.{key} in {config_path} must be a string or a list of strings")
 
     resolved: list[Path] = []
     seen: set[Path] = set()

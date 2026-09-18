@@ -8,6 +8,7 @@ The root of the USB stick looks like this:
     ChartData/Plates/...
     Raster/VFR-*.dcf
 """
+
 from __future__ import annotations
 
 import shutil

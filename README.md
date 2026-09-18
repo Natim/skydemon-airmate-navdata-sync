@@ -150,6 +150,17 @@ twine upload dist/*
 The version lives in `navdata_sync/__init__.py` and is read from there by the
 build backend, so bump it in that one place.
 
+## Development
+
+```bash
+pip install -e '.[dev]'
+pre-commit install
+pytest
+```
+
+`pre-commit` runs the same hooks as the GitHub Actions lint job (ruff, typos,
+YAML/TOML checks). CI also runs `pytest` on Python 3.11, 3.12 and 3.13.
+
 ## A note on the data
 
 The navdata is licensed per subscription and tied to your Dynon serial. Keep

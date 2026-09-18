@@ -6,6 +6,7 @@ Airmate publishes three kinds of URL:
   <base>/Plates/...          approach plate bundles, one zip per region
   <base>/Raster/...          raster VFR charts, shared by everyone
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -17,8 +18,8 @@ from .config import Config
 class Kind(Enum):
     """What a file becomes on the USB stick, which decides how it is staged."""
 
-    DATA = "data"      # .dup, navdata and obstacles, uppercased at the root
-    KEY = "key"        # CHARTS-<serial>.key, unlocks the raster layers
+    DATA = "data"  # .dup, navdata and obstacles, uppercased at the root
+    KEY = "key"  # CHARTS-<serial>.key, unlocks the raster layers
     PLATES = "plates"  # zip expanded at the root, creates ChartData/
     RASTER = "raster"  # .dcf copied under Raster/
 
