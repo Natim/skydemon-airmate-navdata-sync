@@ -113,6 +113,8 @@ and opening the destination in place avoids a temp copy on a nearly-full
 volume. Several sticks (left and right SkyView) are updated in parallel, each
 with its own sequential writer.
 
+![`--sync` hashing both SkyView sticks in parallel](docs/usb-sync.jpg)
+
 ## Repository layout
 
 ```
