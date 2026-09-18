@@ -51,7 +51,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--sync",
         action="store_true",
-        help="run rsync to paths.usb_target instead of just printing it",
+        help="copy the staging folder onto every configured USB stick",
     )
     return parser
 
@@ -82,8 +82,8 @@ def main(argv: list[str] | None = None) -> int:
 
     # Checked before anything is downloaded or staged, since --sync is the whole
     # point of the run when it is passed.
-    if args.sync and config.usb_target is None:
-        print("❌ --sync demande paths.usb_target dans la configuration")
+    if args.sync and not config.usb_targets:
+        print("❌ --sync demande paths.usb_target ou paths.usb_targets dans la configuration")
         return 2
 
     files = catalog.build(config)
@@ -99,11 +99,11 @@ def main(argv: list[str] | None = None) -> int:
 
     missing = prepare.build(files, config.download_dir, config.prepared_dir)
 
-    if args.sync and config.usb_target is not None:
+    if args.sync:
         if missing:
             print("❌ Synchronisation annulée: des fichiers manquent")
             return 1
-        return prepare.sync(config.prepared_dir, config.usb_target)
+        return prepare.sync(config.prepared_dir, config.usb_targets)
 
-    print(prepare.describe_sync(config.prepared_dir, config.usb_target))
+    print(prepare.describe_sync(config.prepared_dir, config.usb_targets))
     return 1 if missing else 0

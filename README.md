@@ -2,8 +2,8 @@
 
 Keeps the navigation data of a Dynon SkyView up to date: it downloads an
 [Airmate](https://www.airmate.aero) AIRAC cycle, lays the files out exactly the
-way the Dynon expects them, and copies the result onto the USB stick without
-rewriting the gigabytes that did not change.
+way the Dynon expects them, and copies the result onto every configured USB
+stick without rewriting the gigabytes that did not change.
 
 Everything specific to a subscription or a machine — the Airmate customer id,
 the Dynon serial, the AIRAC cycle, the local paths — lives in `config.toml`,
@@ -12,7 +12,6 @@ which is git-ignored. The code contains no ids.
 ## Requirements
 
 - Python 3.11 or newer (the config reader uses the standard-library `tomllib`)
-- `rsync`, for the copy to the USB stick
 - An active Airmate subscription bound to your Dynon serial
 
 ## Setup
@@ -67,14 +66,14 @@ navdata-update                 # download the configured cycle, then stage it
 navdata-update --list          # show which files the config resolves to
 navdata-update --cycle 2609    # try the next cycle without editing the config
 navdata-update --skip-download # rebuild the staging folder from the cache
-navdata-update --sync          # ...and rsync it onto the USB stick
+navdata-update --sync          # ...and copy it onto every configured USB stick
 ```
 
 From a checkout without installing, `./navdata-update.py` and
 `python -m navdata_sync` take the same arguments.
 
-Without `--sync` the run stops after staging and prints the exact `rsync`
-command, so you can inspect the result first.
+Without `--sync` the run stops after staging and prints the configured USB
+mounts, so you can inspect the result first.
 
 Downloads are resumable and run four at a time behind one global progress bar;
 interrupting the script and running it again picks up where it left off. Files
@@ -105,11 +104,14 @@ ChartData/Plates/...                       approach plates, from the region zips
 Raster/VFR-*.dcf                           raster VFR charts
 ```
 
-The copy uses `rsync --checksum --inplace --no-whole-file`: the staging folder is
-rebuilt from scratch every run, so timestamps are always new and the default
-size+mtime comparison would recopy everything. Deciding by content instead means
-only genuinely changed blocks are written — which is what keeps the update short
-and easy on a nearly-full FAT-32 stick.
+The copy checksums each file (blake2b) and writes only those whose bytes
+actually changed, in 4 MiB sequential chunks via `aiofile`. The staging folder
+is rebuilt from scratch every run, so timestamps are always new and a
+size+mtime comparison would recopy everything. Full sequential writes of
+changed files are easier on a FAT-32 stick than rsync's random block deltas,
+and opening the destination in place avoids a temp copy on a nearly-full
+volume. Several sticks (left and right SkyView) are updated in parallel, each
+with its own sequential writer.
 
 ## Repository layout
 
@@ -121,7 +123,8 @@ navdata_sync/
   config.py                finds and validates config.toml, applies env overrides
   catalog.py               turns the config into the list of URLs to fetch
   download.py              resumable parallel downloader
-  prepare.py               staging into the Dynon layout, and the rsync call
+  prepare.py               staging into the Dynon layout
+  usb.py                   checksum-and-copy onto one or more USB sticks
   cli.py                   argument parsing and the run sequence
 tools/
   mbtiles_to_dcf.py        converts an MBTiles file into an Airmate-style .dcf

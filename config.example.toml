@@ -57,6 +57,10 @@ download_dir = "downloads"
 # from scratch on every run.
 prepared_dir = "downloads_prepared"
 
-# Mount point of the Dynon USB stick, used by --sync. Leave it empty to only
-# build the staging directory.
-usb_target = "/run/media/YOUR_USER/LH D1000"
+# Mount points of the Dynon USB sticks, used by --sync. One entry per unit
+# (left and right SkyView). A single string still works. Leave the list empty
+# to only build the staging directory.
+usb_targets = [
+    "/run/media/YOUR_USER/LH D1000",
+    "/run/media/YOUR_USER/RH D1000",
+]

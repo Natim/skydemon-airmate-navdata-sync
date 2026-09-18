@@ -25,6 +25,7 @@ PLACEHOLDERS = frozenset({
     "YOUR_AIRMATE_ID",
     "000000",
     "/run/media/YOUR_USER/LH D1000",
+    "/run/media/YOUR_USER/RH D1000",
 })
 
 
@@ -91,7 +92,7 @@ class Config:
     raster: tuple[str, ...]
     download_dir: Path
     prepared_dir: Path
-    usb_target: Path | None
+    usb_targets: tuple[Path, ...]
 
 
 def load(path: Path | None = None) -> Config:
@@ -139,10 +140,6 @@ def load(path: Path | None = None) -> Config:
     # any working directory (cron, a shell alias, the repo itself).
     anchor = path.parent
 
-    usb_target = paths.get("usb_target") or None
-    if usb_target in PLACEHOLDERS:
-        usb_target = None
-
     return Config(
         airmate_id=airmate_id,
         serial=serial,
@@ -152,7 +149,7 @@ def load(path: Path | None = None) -> Config:
         raster=_string_list(data, path, "data", "raster"),
         download_dir=_path(paths, path, "paths", "download_dir", anchor),
         prepared_dir=_path(paths, path, "paths", "prepared_dir", anchor),
-        usb_target=Path(usb_target).expanduser() if usb_target else None,
+        usb_targets=_usb_targets(paths, path),
     )
 
 
@@ -180,3 +177,34 @@ def _string_list(section: dict, path: Path, name: str, key: str) -> tuple[str, .
 def _path(section: dict, path: Path, name: str, key: str, anchor: Path) -> Path:
     value = Path(_string(section, path, name, key)).expanduser()
     return value if value.is_absolute() else anchor / value
+
+
+def _usb_targets(paths: dict, config_path: Path) -> tuple[Path, ...]:
+    """Accept paths.usb_target (string or list) and/or paths.usb_targets (list)."""
+    collected: list[str] = []
+    for key in ("usb_target", "usb_targets"):
+        if key not in paths:
+            continue
+        value = paths[key]
+        if value in (None, "", []):
+            continue
+        if isinstance(value, str):
+            collected.append(value)
+        elif isinstance(value, list) and all(isinstance(item, str) for item in value):
+            collected.extend(value)
+        else:
+            raise ConfigError(
+                f"paths.{key} in {config_path} must be a string or a list of strings"
+            )
+
+    resolved: list[Path] = []
+    seen: set[Path] = set()
+    for raw in collected:
+        if not raw or raw in PLACEHOLDERS:
+            continue
+        target = Path(raw).expanduser()
+        if target in seen:
+            continue
+        seen.add(target)
+        resolved.append(target)
+    return tuple(resolved)

@@ -27,6 +27,8 @@ classifiers = [
 dependencies = [
     "httpx[http2]>=0.28",
     "tqdm>=4.67",
+    "aiofile>=3.9",
+    "rich>=13.9",
 ]
 
 [project.optional-dependencies]
