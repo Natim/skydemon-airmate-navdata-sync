@@ -71,7 +71,9 @@ def relative_files(root: Path) -> list[Path]:
     if not root.is_dir():
         return []
     return sorted(
-        path.relative_to(root) for path in root.rglob("*") if path.is_file() and not path.is_symlink()
+        path.relative_to(root)
+        for path in root.rglob("*")
+        if path.is_file() and not path.is_symlink() and not path.name.startswith(".")
     )
 
 

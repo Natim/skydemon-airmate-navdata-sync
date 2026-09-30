@@ -47,9 +47,15 @@ def build_parser() -> argparse.ArgumentParser:
         help="rebuild the staging folder from the download cache only",
     )
     parser.add_argument(
+        "--skip-prepare",
+        action="store_true",
+        help="reuse the existing staging folder instead of rebuilding it",
+    )
+    parser.add_argument(
         "--sync",
         action="store_true",
-        help="copy the staging folder onto every configured USB stick",
+        help="copy the staging folder onto every configured USB stick "
+        "(reuses staging when it already matches this cycle)",
     )
     return parser
 
@@ -92,10 +98,24 @@ def main(argv: list[str] | None = None) -> int:
         print(f"\ncycle {config.cycle} · {len(files)} fichiers · {config.download_dir}")
         return 0
 
-    if not args.skip_download:
+    staging_ready = prepare.is_ready(files, config.prepared_dir)
+    if args.skip_prepare and not staging_ready:
+        print("❌ --skip-prepare: le dossier de staging est absent ou ne correspond pas au cycle configuré")
+        return 1
+
+    # A later --sync should not unzip plates and recopy rasters. Skip both
+    # download and prepare when staging already matches this catalog, otherwise
+    # a key refresh would leave downloads_prepared/ stale.
+    reuse_staging = staging_ready and (args.sync or args.skip_prepare)
+
+    if not args.skip_download and not reuse_staging:
         asyncio.run(download.run(files, config.download_dir))
 
-    missing = prepare.build(files, config.download_dir, config.prepared_dir)
+    if reuse_staging:
+        print(f"⏭️  Staging déjà prêt ({config.prepared_dir}), préparation ignorée")
+        missing: list[str] = []
+    else:
+        missing = prepare.build(files, config.download_dir, config.prepared_dir)
 
     if args.sync:
         if missing:

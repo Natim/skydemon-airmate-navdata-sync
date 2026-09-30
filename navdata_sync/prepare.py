@@ -18,7 +18,21 @@ from pathlib import Path
 from .catalog import Kind, RemoteFile
 from .usb import describe_sync, sync
 
-__all__ = ["build", "describe_sync", "sync"]
+__all__ = ["build", "describe_sync", "is_ready", "sync"]
+
+# Left in the staging folder so a later --sync can reuse it. Hidden so it is
+# not copied onto the USB stick.
+STAMP_NAME = ".navdata-stamp"
+
+
+def is_ready(files: list[RemoteFile], prepared_dir: Path) -> bool:
+    """Whether prepared_dir already matches this catalog and can be reused."""
+    if not prepared_dir.is_dir():
+        return False
+    stamp = prepared_dir / STAMP_NAME
+    if stamp.is_file() and stamp.read_text(encoding="utf-8") != _stamp_payload(files):
+        return False
+    return all(path.exists() for path in _expected_outputs(files, prepared_dir))
 
 
 def build(files: list[RemoteFile], download_dir: Path, prepared_dir: Path) -> list[str]:
@@ -53,4 +67,29 @@ def build(files: list[RemoteFile], download_dir: Path, prepared_dir: Path) -> li
     for name in missing:
         print(f"⚠️  {name} absent du dossier de téléchargement, ignoré")
 
+    if not missing:
+        (prepared_dir / STAMP_NAME).write_text(_stamp_payload(files), encoding="utf-8")
+
     return missing
+
+
+def _stamp_payload(files: list[RemoteFile]) -> str:
+    return "\n".join(f"{file.kind.value}\t{file.name}" for file in sorted(files, key=lambda f: f.name))
+
+
+def _expected_outputs(files: list[RemoteFile], prepared_dir: Path) -> list[Path]:
+    paths: list[Path] = []
+    needs_plates = False
+    for file in files:
+        match file.kind:
+            case Kind.DATA:
+                paths.append(prepared_dir / file.name.upper())
+            case Kind.KEY:
+                paths.append(prepared_dir / file.name)
+            case Kind.PLATES:
+                needs_plates = True
+            case Kind.RASTER:
+                paths.append(prepared_dir / "Raster" / file.name)
+    if needs_plates:
+        paths.append(prepared_dir / "ChartData")
+    return paths

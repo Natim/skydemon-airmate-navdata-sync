@@ -64,16 +64,19 @@ then `~/.config/navdata-sync/config.toml` (honouring `XDG_CONFIG_HOME`), then
 ```bash
 navdata-update                 # download the configured cycle, then stage it
 navdata-update --list          # show which files the config resolves to
-navdata-update --cycle 2609    # try the next cycle without editing the config
+navdata-update --cycle 2610    # try the next cycle without editing the config
 navdata-update --skip-download # rebuild the staging folder from the cache
-navdata-update --sync          # ...and copy it onto every configured USB stick
+navdata-update --sync          # copy staging onto the USB sticks
 ```
 
 From a checkout without installing, `./navdata-update.py` and
 `python -m navdata_sync` take the same arguments.
 
 Without `--sync` the run stops after staging and prints the configured USB
-mounts, so you can inspect the result first.
+mounts, so you can inspect the result first. A later `--sync` reuses
+`downloads_prepared/` when it already matches the configured cycle (no second
+unzip of the plate bundles). `--skip-prepare` forces that reuse; if staging is
+missing or was built for another cycle, the folder is rebuilt.
 
 Downloads are resumable and run four at a time behind one global progress bar;
 interrupting the script and running it again picks up where it left off. Files
