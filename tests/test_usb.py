@@ -23,6 +23,18 @@ def test_prune_and_relative_files(tmp_path: Path) -> None:
     assert not (stick / "old").exists()
 
 
+def test_prune_keeps_case_variants(tmp_path: Path) -> None:
+    stick = tmp_path / "RH D1000"
+    stick.mkdir()
+    (stick / "CHARTS.key").write_text("ok", encoding="utf-8")
+    (stick / "stale.txt").write_text("x", encoding="utf-8")
+
+    extras = usb.prune_extras(stick, {Path("charts.key")})
+    assert extras == [Path("stale.txt")]
+    assert (stick / "CHARTS.key").is_file()
+    assert not (stick / "stale.txt").exists()
+
+
 def test_sync_two_targets_copy_skip_rewrite_and_delete(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

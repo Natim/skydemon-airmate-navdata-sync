@@ -34,15 +34,10 @@ from pathlib import Path
 
 from aiofile import async_open
 from caio.thread_aio_asyncio import AsyncioContext
-from rich.progress import (
-    BarColumn,
-    DownloadColumn,
-    Progress,
-    TaskID,
-    TextColumn,
-    TimeRemainingColumn,
-    TransferSpeedColumn,
-)
+from rich.progress import BarColumn, Progress, ProgressColumn, TaskID, TextColumn, TimeRemainingColumn
+from rich.text import Text
+
+from .download import human_size
 
 # 4 MiB sequential transfers: large enough to keep a USB controller busy,
 # small enough to report progress and overlap two destinations.
@@ -77,11 +72,22 @@ def relative_files(root: Path) -> list[Path]:
     )
 
 
+def _norm_rel(rel: Path) -> str:
+    """FAT-32 is case-insensitive; Linux Path comparison is not."""
+    return str(rel).casefold()
+
+
 def prune_extras(target: Path, wanted: set[Path]) -> list[Path]:
     """Delete dest files (and then empty dirs) that are not in the staging tree."""
-    extras = [rel for rel in relative_files(target) if rel not in wanted]
+    wanted_norm = {_norm_rel(rel) for rel in wanted}
+    extras = [rel for rel in relative_files(target) if _norm_rel(rel) not in wanted_norm]
     for rel in extras:
         (target / rel).unlink(missing_ok=True)
+    _remove_empty_dirs(target)
+    return extras
+
+
+def _remove_empty_dirs(target: Path) -> None:
     for directory in sorted(
         (path for path in target.rglob("*") if path.is_dir()),
         key=lambda path: len(path.parts),
@@ -91,7 +97,6 @@ def prune_extras(target: Path, wanted: set[Path]) -> list[Path]:
             directory.rmdir()
         except OSError:
             pass
-    return extras
 
 
 def describe_sync(prepared_dir: Path, usb_targets: tuple[Path, ...]) -> str:
@@ -132,15 +137,15 @@ async def _sync(prepared_dir: Path, usb_targets: tuple[Path, ...]) -> int:
 
     async with AsyncioContext(max_requests=32) as ctx:
         manifest = await _index_source(prepared_dir, source_files, ctx)
-        source_total = sum(info.size for info in manifest)
         with _usb_progress() as progress:
             task_ids = [
                 progress.add_task(
                     description=target.name or str(target),
-                    total=max(source_total, 1),
+                    total=max(len(manifest), 1),
                     label=target.name or str(target),
                     phase="Vérif.",
                     current="",
+                    unit="fichier",
                 )
                 for target in mounted
             ]
@@ -173,14 +178,35 @@ async def _sync(prepared_dir: Path, usb_targets: tuple[Path, ...]) -> int:
     return 1 if failed else 0
 
 
+class _WorkColumn(ProgressColumn):
+    """Bytes for copy/hash, file counts for verify/purge."""
+
+    def render(self, task) -> Text:
+        completed = float(task.completed or 0)
+        total = float(task.total or 0)
+        if task.fields.get("unit") == "fichier":
+            return Text(f"{int(completed)}/{int(total)} fichiers")
+        return Text(f"{human_size(completed)}/{human_size(total)}")
+
+
+class _RateColumn(ProgressColumn):
+    def render(self, task) -> Text:
+        speed = task.speed
+        if speed is None:
+            return Text("-")
+        if task.fields.get("unit") == "fichier":
+            return Text(f"{speed:.1f}/s")
+        return Text(f"{human_size(speed)}/s")
+
+
 def _usb_progress() -> Progress:
     """One live bar per USB stick (or a single bar for the source checksum)."""
     return Progress(
         TextColumn("[bold cyan]{task.fields[label]:<12}"),
         TextColumn("{task.fields[phase]:<8}"),
         BarColumn(bar_width=None),
-        DownloadColumn(),
-        TransferSpeedColumn(),
+        _WorkColumn(),
+        _RateColumn(),
         TimeRemainingColumn(),
         TextColumn("{task.fields[current]}", style="dim", markup=False),
         expand=True,
@@ -210,6 +236,7 @@ async def _index_source(prepared_dir: Path, files: list[Path], ctx: AsyncioConte
             label="Source",
             phase="Hash",
             current="",
+            unit="B",
         )
         manifest: list[_FileInfo] = []
         for rel in files:
@@ -235,40 +262,46 @@ async def _sync_target(
     wanted = {info.rel for info in manifest}
 
     try:
-        extras = prune_extras(target, wanted)
-        report.deleted = len(extras)
-        for rel in extras:
-            progress.log(f"🗑️  [{label}] {rel}")
-
+        # Copy (and skip) first, then delete leftovers. Pruning tens of thousands
+        # of plates up front blocked the event loop, froze both bars at 0 %, and
+        # emptied the stick before anything was verified.
         to_copy: list[_FileInfo] = []
-        for info in manifest:
+        n_files = len(manifest)
+        for i, info in enumerate(manifest, 1):
             dest = target / info.rel
-            progress.update(task_id, phase="Vérif.", current=str(info.rel))
+            progress.update(
+                task_id,
+                phase="Vérif.",
+                current=f"{i}/{n_files} {info.rel}",
+            )
             if dest.is_file() and dest.stat().st_size == info.size:
-                digest = await _digest(dest, ctx, lambda n: _advance(progress, task_id, n))
+                digest = await _digest(dest, ctx)
                 if digest == info.digest:
                     report.skipped += 1
+                    progress.update(task_id, advance=1)
                     continue
-            else:
-                progress.update(task_id, advance=info.size)
             to_copy.append(info)
+            progress.update(task_id, advance=1)
 
-        if not to_copy:
-            _finish(progress, task_id, "OK")
-            return report
+        if to_copy:
+            copy_total = sum(info.size for info in to_copy)
+            progress.reset(task_id, total=max(copy_total, 1))
+            progress.update(task_id, phase="Copie", current="", unit="B")
+            for info in to_copy:
+                progress.update(task_id, phase="Copie", current=str(info.rel))
+                await _copy_file(
+                    prepared_dir / info.rel,
+                    target / info.rel,
+                    ctx,
+                    lambda n: _advance(progress, task_id, n),
+                )
+                report.copied += 1
 
-        copy_total = sum(info.size for info in to_copy)
-        progress.reset(task_id, total=max(copy_total, 1))
-        progress.update(task_id, phase="Copie", current="")
-        for info in to_copy:
-            progress.update(task_id, phase="Copie", current=str(info.rel))
-            await _copy_file(
-                prepared_dir / info.rel,
-                target / info.rel,
-                ctx,
-                lambda n: _advance(progress, task_id, n),
-            )
-            report.copied += 1
+        progress.update(task_id, phase="Purge", current="")
+        extras = await asyncio.to_thread(prune_extras, target, wanted)
+        report.deleted = len(extras)
+        if extras:
+            progress.log(f"🗑️  [{label}] {len(extras)} fichiers superflus")
         _finish(progress, task_id, "OK")
     except OSError as exc:
         report.error = str(exc)
