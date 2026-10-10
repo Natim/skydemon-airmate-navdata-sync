@@ -266,13 +266,12 @@ async def _sync_target(
         # of plates up front blocked the event loop, froze both bars at 0 %, and
         # emptied the stick before anything was verified.
         to_copy: list[_FileInfo] = []
-        n_files = len(manifest)
-        for i, info in enumerate(manifest, 1):
+        for info in manifest:
             dest = target / info.rel
             progress.update(
                 task_id,
                 phase="Vérif.",
-                current=f"{i}/{n_files} {info.rel}",
+                current=str(info.rel),
             )
             if dest.is_file() and dest.stat().st_size == info.size:
                 digest = await _digest(dest, ctx)
