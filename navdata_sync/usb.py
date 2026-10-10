@@ -27,6 +27,7 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import os
+import time
 from collections.abc import Callable
 from contextlib import AsyncExitStack
 from dataclasses import dataclass
@@ -63,13 +64,40 @@ class SyncReport:
 
 def relative_files(root: Path) -> list[Path]:
     """Files under root, as paths relative to it, in a stable order."""
+    files, _dirs = _scan_tree(root)
+    return files
+
+
+def _scan_tree(
+    root: Path,
+    on_file: Callable[[int, Path], None] | None = None,
+) -> tuple[list[Path], list[Path]]:
+    """Files and directories under root, relative to it.
+
+    Files are sorted. Directories are deepest-first so empty ones can be
+    removed after extras are deleted. ``on_file(n, rel)`` runs as each file
+    is discovered (``n`` starts at 1), before the sort.
+    """
     if not root.is_dir():
-        return []
-    return sorted(
-        path.relative_to(root)
-        for path in root.rglob("*")
-        if path.is_file() and not path.is_symlink() and not path.name.startswith(".")
-    )
+        return [], []
+    files: list[Path] = []
+    dirs: list[Path] = []
+    seen = 0
+    for path in root.rglob("*"):
+        if path.is_symlink():
+            continue
+        rel = path.relative_to(root)
+        if path.is_dir():
+            dirs.append(rel)
+            continue
+        if path.is_file() and not path.name.startswith("."):
+            files.append(rel)
+            seen += 1
+            if on_file is not None:
+                on_file(seen, rel)
+    files.sort()
+    dirs.sort(key=lambda rel: len(rel.parts), reverse=True)
+    return files, dirs
 
 
 def _norm_rel(rel: Path) -> str:
@@ -77,26 +105,36 @@ def _norm_rel(rel: Path) -> str:
     return str(rel).casefold()
 
 
-def prune_extras(target: Path, wanted: set[Path]) -> list[Path]:
-    """Delete dest files (and then empty dirs) that are not in the staging tree."""
+def prune_extras(
+    target: Path,
+    wanted: set[Path],
+    on_scan: Callable[[int, Path], None] | None = None,
+    on_purge: Callable[[int, int, Path], None] | None = None,
+) -> list[Path]:
+    """Delete dest files (and then empty dirs) that are not in the staging tree.
+
+    ``on_scan`` follows the directory walk. ``on_purge(done, total, rel)`` follows
+    each deletion and each directory-removal attempt.
+    """
     wanted_norm = {_norm_rel(rel) for rel in wanted}
-    extras = [rel for rel in relative_files(target) if _norm_rel(rel) not in wanted_norm]
+    files, dirs = _scan_tree(target, on_scan)
+    extras = [rel for rel in files if _norm_rel(rel) not in wanted_norm]
+    steps = len(extras) + len(dirs)
+    done = 0
     for rel in extras:
         (target / rel).unlink(missing_ok=True)
-    _remove_empty_dirs(target)
-    return extras
-
-
-def _remove_empty_dirs(target: Path) -> None:
-    for directory in sorted(
-        (path for path in target.rglob("*") if path.is_dir()),
-        key=lambda path: len(path.parts),
-        reverse=True,
-    ):
+        done += 1
+        if on_purge is not None:
+            on_purge(done, steps, rel)
+    for rel in dirs:
         try:
-            directory.rmdir()
+            (target / rel).rmdir()
         except OSError:
             pass
+        done += 1
+        if on_purge is not None:
+            on_purge(done, steps, rel)
+    return extras
 
 
 def describe_sync(prepared_dir: Path, usb_targets: tuple[Path, ...]) -> str:
@@ -135,6 +173,7 @@ async def _sync(prepared_dir: Path, usb_targets: tuple[Path, ...]) -> int:
         print(f"❌ {prepared_dir} est vide, rien à copier")
         return 1
 
+    started = time.perf_counter()
     async with AsyncioContext(max_requests=32) as ctx:
         manifest = await _index_source(prepared_dir, source_files, ctx)
         with _usb_progress() as progress:
@@ -157,6 +196,7 @@ async def _sync(prepared_dir: Path, usb_targets: tuple[Path, ...]) -> int:
             )
         print("💾 Vidage des caches disque...")
         os.sync()
+    elapsed = time.perf_counter() - started
 
     failed = False
     for report in reports:
@@ -173,9 +213,24 @@ async def _sync(prepared_dir: Path, usb_targets: tuple[Path, ...]) -> int:
                 f"{report.copied} copiés, {report.skipped} inchangés, "
                 f"{report.deleted} supprimés"
             )
+    print(f"⏱️  Durée totale : {_format_duration(elapsed)}")
     if missing:
         failed = True
     return 1 if failed else 0
+
+
+def _format_duration(seconds: float) -> str:
+    """Wall-clock duration for the summary, e.g. ``1 h 2 min 3 s``."""
+    whole = max(0, round(seconds))
+    hours, rem = divmod(whole, 3600)
+    minutes, secs = divmod(rem, 60)
+    parts: list[str] = []
+    if hours:
+        parts.append(f"{hours} h")
+    if hours or minutes:
+        parts.append(f"{minutes} min")
+    parts.append(f"{secs} s")
+    return " ".join(parts)
 
 
 class _WorkColumn(ProgressColumn):
@@ -185,6 +240,8 @@ class _WorkColumn(ProgressColumn):
         completed = float(task.completed or 0)
         total = float(task.total or 0)
         if task.fields.get("unit") == "fichier":
+            if task.total is None:
+                return Text(f"{int(completed)} fichiers")
             return Text(f"{int(completed)}/{int(total)} fichiers")
         return Text(f"{human_size(completed)}/{human_size(total)}")
 
@@ -216,6 +273,31 @@ def _usb_progress() -> Progress:
 
 def _advance(progress: Progress, task_id: TaskID, n: int) -> None:
     progress.update(task_id, advance=n)
+
+
+def _restart_phase(
+    progress: Progress,
+    task_id: TaskID,
+    *,
+    phase: str,
+    total: float | None,
+    unit: str,
+) -> None:
+    """Start a phase from zero. ``total=None`` keeps the bar open-ended.
+
+    Progress.reset treats ``total=None`` as "keep the current total", so the
+    directory walk (unknown length) has to assign it under the progress lock.
+    """
+    now = progress.get_time()
+    with progress._lock:
+        task = progress._tasks[task_id]
+        task._reset()
+        task.total = total
+        task.completed = 0
+        task.start_time = now
+        task.finished_time = None
+        task.fields.update(phase=phase, current="", unit=unit)
+    progress.refresh()
 
 
 def _finish(progress: Progress, task_id: TaskID, phase: str, current: str = "") -> None:
@@ -296,8 +378,21 @@ async def _sync_target(
                 )
                 report.copied += 1
 
-        progress.update(task_id, phase="Purge", current="")
-        extras = await asyncio.to_thread(prune_extras, target, wanted)
+        _restart_phase(progress, task_id, phase="Liste", total=None, unit="fichier")
+
+        def on_scan(n: int, rel: Path) -> None:
+            progress.update(task_id, completed=n, current=str(rel))
+
+        purge_started = False
+
+        def on_purge(done: int, total: int, rel: Path) -> None:
+            nonlocal purge_started
+            if not purge_started:
+                _restart_phase(progress, task_id, phase="Purge", total=total, unit="fichier")
+                purge_started = True
+            progress.update(task_id, completed=done, current=str(rel))
+
+        extras = await asyncio.to_thread(prune_extras, target, wanted, on_scan, on_purge)
         report.deleted = len(extras)
         if extras:
             progress.log(f"🗑️  [{label}] {len(extras)} fichiers superflus")

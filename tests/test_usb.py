@@ -71,6 +71,52 @@ def test_sync_two_targets_copy_skip_rewrite_and_delete(
     assert not (lh / "Raster" / "VFR.dcf").exists()
 
 
+def test_prune_reports_scan_and_purge(tmp_path: Path) -> None:
+    stick = tmp_path / "RH D1000"
+    (stick / "keep.txt").parent.mkdir()
+    (stick / "keep.txt").write_text("ok", encoding="utf-8")
+    (stick / "old").mkdir()
+    (stick / "old" / "nested.bin").write_bytes(b"stale")
+
+    scanned: list[tuple[int, Path]] = []
+    purged: list[tuple[int, int, Path]] = []
+    extras = usb.prune_extras(
+        stick,
+        {Path("keep.txt")},
+        on_scan=lambda n, rel: scanned.append((n, rel)),
+        on_purge=lambda done, total, rel: purged.append((done, total, rel)),
+    )
+
+    assert [n for n, _rel in scanned] == list(range(1, len(scanned) + 1))
+    assert {rel for _n, rel in scanned} == {Path("keep.txt"), Path("old/nested.bin")}
+    assert extras == [Path("old/nested.bin")]
+    assert purged[0][2] == Path("old/nested.bin")
+    assert purged[-1][0] == purged[-1][1]
+    assert Path("old") in [rel for _done, _total, rel in purged]
+    assert not (stick / "old").exists()
+
+
+def test_format_duration() -> None:
+    assert usb._format_duration(0) == "0 s"
+    assert usb._format_duration(59.4) == "59 s"
+    assert usb._format_duration(61) == "1 min 1 s"
+    assert usb._format_duration(3661) == "1 h 1 min 1 s"
+
+
+def test_sync_summary_includes_total_duration(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.setattr(usb.os, "sync", lambda: None)
+    src = tmp_path / "prepared"
+    stick = tmp_path / "LH D1000"
+    src.mkdir()
+    (src / "a.txt").write_text("a", encoding="utf-8")
+    stick.mkdir()
+
+    assert usb.sync(src, (stick,)) == 0
+    assert "Durée totale" in capsys.readouterr().out
+
+
 def test_describe_sync_reports_mount_status(tmp_path: Path) -> None:
     mounted = tmp_path / "RH D1000"
     mounted.mkdir()
